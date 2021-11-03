@@ -51,8 +51,33 @@ contract BlindAuction{
       }));
   }
   
-  function reveal() public {
+  function reveal(
+      uint[] memory _values,
+      uint[] memory _fake
+  )
+      public
+      onlyAfter(biddingEnd)
+      onlyBefore(revealEnd)
+  {
+      uint length = bids[msg.sender].length;
+      require(_values.length == length);
+      require(_fake.length == length);
       
+     
+      for (uint i=0; i<length; i++) {
+          Bid storage bidToCheck = bids[msg.sender][i];
+          (uint value, bool fake) = (_values[i], _fake[i]);
+          if (bidToCheck.blindedBid != keccak256(abi.encodePacked(value, fake))) {
+              continue;
+          }
+         
+          if(!fake && bidToCheck.deposit >= value) {
+              if (!placeBid(msg.sender, value)){
+                  payable(msg.sender).transfer(bidToCheck.deposit * (1 ether));
+              }
+          } 
+          bidToCheck.blindedBid = bytes32(0);
+      }
   }
   
   function auctionEnd() public payable onlyAfter(revealEnd) {
@@ -69,7 +94,7 @@ contract BlindAuction{
           pendingReturns[msg.sender] = 0;
           
           
-          payable(msg.sender).transfer(amount);
+          payable(msg.sender).transfer(amount  * (1 ether));
       }
       
   }
@@ -86,4 +111,5 @@ contract BlindAuction{
       return true;
   }
 }
-
+      
+      
