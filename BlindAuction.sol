@@ -23,41 +23,67 @@ contract BlindAuction{
   event AuctionEnded(address winner, uint highestBid);
   
   // MODIFIERS  
-  modifier onlyBefore(uint _time) {require(block.timestamp < _time); _; }
-  modifier onlyAfter(uint _time) {  
+  modifier onlyBefore(uint _time) { require(block.timestamp < _time); _; }
+  modifier onlyAfter(uint _time) { require(block.timestamp > _time); _; }
   
   // constructor
-  constructor(){
+  constructor(
+      uint _biddingTime,
+      uint _revealTime,
+      address payable _beneficiary
+  ){
+       beneficiary = _beneficiary;
+       biddingEnd = block.timestamp + _biddingTime;
+       revealEnd = biddingEnd + _revealTime;
       
   }
   
   // FUNCTIONS
   
-  function generateBlindedBidBytes32() public {
-      
+  function generateBlindedBidBytes32(uint value, bool fake) public view returns (bytes32) {
+      return keccak256(abi.encodePacked(value, fake));
   }
   
-  function bid() public {
-      
+  function bid(bytes32 _blindeBid) public payable onlyBefore(biddingEnd) {
+      bids[msg.sender].push(Bid({
+         blindedBid: _blindeBid,
+         deposit: msg.value
+      }));
   }
   
   function reveal() public {
       
   }
   
-  function auctionEnd() public {
-      
+  function auctionEnd() public payable onlyAfter(revealEnd) {
+      require(!ended);
+      emit AuctionEnded(highestBidder, highestBid);
+      ended = true;
+      beneficiary.transfer(highestBid); 
   }
   
   function withdraw() public {
       
-  }
-  
-  function placeBid() public {
+      uint amount = pendingReturns[msg.sender];
+      if (amount > 0) {
+          pendingReturns[msg.sender] = 0;
+          
+          
+          payable(msg.sender).transfer(amount);
+      }
       
   }
   
-    
+  function placeBid(address bidder, uint value) internal returns(bool success) {
+      if (value <= highestBid) {
+          return false;
+      }
+      if (highestBidder != address(0)) {
+          pendingReturns[highestBidder] += highestBid;
+      }
+      highestBid = value;
+      highestBidder = bidder;
+      return true;
+  }
 }
 
-  
