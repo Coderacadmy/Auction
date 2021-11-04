@@ -53,7 +53,7 @@ contract BlindAuction{
   
   function reveal(
       uint[] memory _values,
-      uint[] memory _fake
+      bool[] memory _fake
   )
       public
       onlyAfter(biddingEnd)
