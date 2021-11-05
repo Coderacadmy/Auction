@@ -1,4 +1,5 @@
-pragma solidity >=0.4.0 <0.9.0;
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity >=0.4.0 <0.8.0;
 contract BlindAuction{
    
   // VARIABLES
@@ -40,7 +41,7 @@ contract BlindAuction{
   
   // FUNCTIONS
   
-  function generateBlindedBidBytes32(uint value, bool fake) public view returns (bytes32) {
+  function generateBlindedBidBytes32(uint value, bool fake) public pure returns (bytes32) {
       return keccak256(abi.encodePacked(value, fake));
   }
   
