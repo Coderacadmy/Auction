@@ -1,107 +1,253 @@
-pragma solidity >=0.4.0 <0.9.0;
+// SPDX-License-Identifier: MIT
 
-contract BlindAuction {
+pragma solidity >=0.5.0 < 0.9.0;
+
+contract demo 
+{
     
-    // VERIABLES
-    struct Bid{
-      bytes32 blindedBid;
-      uint deposit;
+    //////// STRUCTS /////////
+    
+    struct Auction{
+        address payable owner;
+        string name;
+        string description;
+        uint minBid;
+        uint MaxBid;
+        uint threshold;
+        uint startTime;
+        uint endTime;
+        uint bidIncrement;
     }
     
-    uint threshold; // Threshold of the Auction
-    address payable public beneficiary; //contract and auction owner
-    uint public biddingEnd; //bids can no longer be placed after this time
-    bool public ended;
-    uint public maxBid;
-    uint public minBid;
+    struct MultiAuctions {
+        address payable _owner;
+        uint _id;
+    }
+    
+    struct orders {
+       address payable bidderAddresses;
+       uint biddingAmount;
+    }
+    
+    ///////// ARRAYS //////////
+    
+    address[] private bidderAddress; 
+    
+    address[] private ownerAddress;
+    
+    
+     ////// state  //////
+     
+    uint public amount;
+    bool public canceled;
+    uint public highestBindingBid;
     address public highestBidder;
+    bool ownerHasWithdrawn;
     
+    Auction public auction;
+    
+    
+    ////////////// MAPPING ///////////////
+
+    mapping (address => uint[]) public ownerAuctions;
+    
+    mapping (address => uint[]) public bidderAuctions;
+    
+    mapping (uint => orders[]) public orderAuctions;
  
+    mapping(address => uint256) public fundsByBidder;
     
-    // MAPPINGS
-    mapping(address => Bid[]) public bids;
+    mapping(uint => Auction) public auctionData;
+    
     mapping(address => uint) pendingReturns; 
     
-    // EVENTS
-    event AuctionEnded(address winner, uint highestBid);
-
     
-    /// Modifiers are a convenient way to validate inputs to
-    /// functions. `onlyBefore` is applied to `bid` below:
-    /// The new function body is the modifier's body where
-    /// `_` is replaced by the old function body.
-    modifier onlyBefore(uint _time) { require(now < _time); _; }
-    modifier onlyAfter(uint _time) { require(now > _time); _; }
+    /////// EVENTS /////////
 
-
+    event LogBid(address bidder, uint bid, address highestBidder, uint highestBid, uint highestBindingBid);
     
-    // constructor
-    constructor(
-      string memory name,
-      string memory description,
-      uint _biddingTime,
-      uint _min_Bid,
-      uint _max_Bid,
-      uint _thereshold,
-      address payable _beneficiary
-  ) public {
-       beneficiary = _beneficiary;
-       biddingEnd = block.timestamp + _biddingTime;
+    event LogWithdrawal(address withdrawer, address withdrawalAccount, uint amount);
+    
+    event LogCanceled();
+    
+    event LogNewAuctioner(address newAuctioner); // adding
+    
+    event LogNewAuction(address saller, uint _auctioner); // adding
+    
+    event LogNewBidderAuctioner(address newAuctioner); // adding
+    
+    event LogNewBidderAuction(address saller, uint _auctioner); // adding
+    
+    
+    /////// FUNCTIONS  //////////
+    
+    function startAuction (
+        uint id,
+        address payable owner,
+        string memory name,
+        string memory description,
+        uint minBid,
+        uint maxBid,
+        uint threshold,
+        uint startTime,
+        uint endTime,
+        uint bidIncrement
+    ) 
+        public
+    {
+        auctionData[id] = Auction(
+            owner,
+            name,
+            description,
+            minBid,
+            maxBid,
+            threshold,
+            startTime,
+            endTime,
+            bidIncrement
+        );
+        updateAuctioner(owner);
+    }
+    
+    
+    function isOwner(address owner) public view returns(bool isIndeed) {
+        // has auction before
+        return ownerAuctions[owner].length > 0;
+    }
+
       
-  }
+    function updateAuctioner(address owner) public {
+        if(!isOwner(owner)) {
+            ownerAddress.push(owner);
+            emit LogNewAuctioner(owner);
+        }
+    }
     
-    // FUNCTIONS
     
-    function generateBlindedBidBytes32(uint value, bool fake) public view returns (bytes32) {
-      return keccak256(abi.encodePacked(value, fake));
-      
-  }
-  
-    /// Place a blinded bid with `_blindedBid` =
-    /// keccak256(abi.encodePacked(value, fake, secret)).
-    /// The sent ether is only refunded if the bid is correctly
-    /// revealed in the revealing phase. The bid is valid if the
-    /// ether sent together with the bid is at least "value" and
-    /// "fake" is not true. Setting "fake" to true and sending
-    /// not the exact amount are ways to hide the real bid but
-    /// still make the required deposit. The same address can
-    /// place multiple bids.
-    function bid(bytes32 _blindedBid)
+    function totalOwners() public view returns (uint) {
+        return ownerAddress.length;
+    }
+    
+    
+    function setAuctioner(uint  _auctioner)  public {
+            updateAuctioner(msg.sender);
+            ownerAuctions[msg.sender].push(_auctioner);
+            emit LogNewAuction(msg.sender, _auctioner);
+    }
+    
+    
+    function placeBid(address payable _bidder, uint amount, uint _id)
         public
         payable
-        onlyBefore(biddingEnd)
+        // onlyAfterStart
+        // onlyBeforeEnd
+        // onlyNotCanceled
+        // onlyOwner
+        returns (bool success)
     {
-        // If the bid is not higher, send the money back
-        // (the failing require will revert all changes in this function execution including it having received the money).
-        require(msg.value >= minBid, "Your bid is lower then minimum bidding amount. Try bidding higher!");
-        require(msg.sender != );
+        updateBidderAuctioner(_bidder);
         
-        bids[msg.sender].push(Bid({
-            blindedBid: _blindedBid,
-            deposit: msg.value
-        }));
+        
+        // reject double bid from same address
+        // require (msg.sender != bidderAccts, "You already placed a bin on this Auction");
+        
+        // reject payments of 0 ETH
+        require (msg.value > auction.minBid,"value must be greater then minBid");
+
+        // calculate the user's total bid based on the current amount they've sent to the contract
+        // plus whatever has been sent with this transaction
+        uint newBid = fundsByBidder[msg.sender] + msg.value;
+
+        // if the user isn't even willing to overbid the highest binding bid, there's nothing for us
+        // to do except revert the transaction.
+        require (newBid > highestBindingBid,"your bid is less than the last bid");
+
+        // grab the previous highest bid (before updating fundsByBidder, in case msg.sender is the
+        // highestBidder and is just increasing their maximum bid).
+        uint highestBid = fundsByBidder[highestBidder];
+
+        fundsByBidder[msg.sender] = newBid;
+
+        if (newBid <= highestBid) {
+            // if the user has overbid the highestBindingBid but not the highestBid, we simply
+            // increase the highestBindingBid and leave highestBidder alone.
+
+            // note that this case is impossible if msg.sender == highestBidder because you can never
+            // bid less ETH than you've already bid.
+
+            highestBindingBid = min(newBid + auction.bidIncrement, highestBid);
+        } else {
+            // if msg.sender is already the highest bidder, they must simply be wanting to raise
+            // their maximum bid, in which case we shouldn't increase the highestBindingBid.
+
+            // if the user is NOT highestBidder, and has overbid highestBid completely, we set them
+            // as the new highestBidder and recalculate highestBindingBid.
+
+            if (msg.sender != highestBidder) {
+                highestBidder = msg.sender;
+                highestBindingBid = min(newBid, highestBid + auction.bidIncrement);
+            }
+            highestBid = newBid;
+        }
+        
+        emit LogBid(msg.sender, newBid, highestBidder, highestBid, highestBindingBid);
+        return true;
+        
     }
     
-        // This is an "internal" function which means that it
-    // can only be called from the contract itself (or from
-    // derived contracts).
-    function placeBid(address bidder, uint value) internal
-            returns (bool success)
+    
+    function isBidder(address _bidder) public view returns(bool isIndeed) {
+        // has auction before
+        return bidderAuctions[_bidder].length > 0;
+    }
+
+      
+    function updateBidderAuctioner(address _bidder) public {
+        if(!isBidder(_bidder)) {
+            bidderAddress.push(_bidder);
+            emit LogNewBidderAuctioner(_bidder);
+        }
+    }
+    
+    
+    function totalBidder() public view returns (uint) {
+        return bidderAddress.length;
+    }
+    
+    
+    function setBidderAuctioner(uint  _auctioner)  public {
+            // there is no known rule about minimum bid, but let's say 0 is too low.
+            updateBidderAuctioner(msg.sender);
+            bidderAuctions[msg.sender].push(_auctioner);
+            emit LogNewBidderAuction(msg.sender, _auctioner);
+    }
+    
+    
+    function min(uint a, uint b)
+        private 
+        pure
+        returns (uint)
     {
-        if (value <= maxBid || value <= minBid) {
-            return false;
-        }
-        if (highestBidder != address(0)) {
-            // Refund the previously highest bidder.
-            pendingReturns[highestBidder] += maxBid;
-        }
-        maxBid = value;
-        highestBidder = bidder;
+        if (a < b) return a;
+        return b;
+    }
+    
+    
+    function cancelAuction()
+        public
+        onlyOwner
+        onlyBeforeEnd
+        onlyNotCanceled
+        returns (bool success)
+    {
+        canceled = true;
+        emit LogCanceled();
         return true;
     }
-       /// Withdraw a bid that was overbid.
+    
+    
     function withdraw() public {
-        uint amount = pendingReturns[msg.sender];
+        uint amount = fundsByBidder[msg.sender];
         if (amount > 0) {
             // It is important to set this to zero because the recipient
             // can call this function again as part of the receiving call
@@ -109,20 +255,36 @@ contract BlindAuction {
             // conditions -> effects -> interaction).
             pendingReturns[msg.sender] = 0;
 
-            msg.sender.transfer(amount);
+            payable(msg.sender).transfer(amount);
         }
     }
+    
+    
+    /////// MODIFIERS  //////////
 
-    /// End the auction and send the highest bid
-    /// to the beneficiary.
-    function auctionEnd()
-        public
-        onlyAfter(biddingEnd)
-    {
-     //   require(threshold != highestBidder, "ccsdfrgv");
-        require(!ended);
-        emit AuctionEnded(highestBidder, maxBid);
-        ended = true;
-        beneficiary.transfer(maxBid);
+    modifier onlyOwner {
+        require (msg.sender != auction.owner, "onlyNotOwner : : Owner cannot call this funtion");
+        _;
+    }
+
+    modifier onlyAfterStart {
+        require (now < auction.startTime,"onlyAfterStart : :   auction not started yet");
+        _;
+    }
+
+    modifier onlyBeforeEnd {
+        require (auction.startTime < auction.endTime, "onlyBeforeEnd :: Auction end");
+        _;
+    }
+
+    modifier onlyNotCanceled {
+        require (!canceled, "onlyNotCanceled :: Auction canceled");
+        _;
+    }
+
+    modifier onlyEndedOrCanceled {
+        require
+        (now < auction.endTime && !canceled, "onlyEndedOrCanceled :: Time over and aucti");
+        _;
     }
 }
