@@ -15,11 +15,17 @@ contract demo
         uint bidIncrement;
     }
     
-    struct bidStruct {
-        address payable bidder;
+    struct orders{
+       address payable bidderAddresses;
+       uint biddingAmount;
     }
     
- //   address[] private bidderAccts; 
+    // struct bidStruct {
+    //     address payable bidder;
+    // }
+    
+    address[] private bidderAddress; 
+    
     address[] private ownerAddress;
     
     
@@ -36,10 +42,17 @@ contract demo
     ////////////// MAPPING ///////////////
     
     // For each address, there are 0-n bids
-//    mapping (address => uint[]) public bids;
-
-    mapping (address => bidStruct) biddersMap; 
+ //   mapping (address => uint[]) public bids;
+ //   mapping (address => bidStruct) biddersMap; 
+ 
     mapping (address => uint[]) public ownerAuctions;
+    mapping (address => uint[]) public bidderAuctions;
+    
+    mapping (uint => orders[]) public orderAuctions;
+    
+    
+    
+    //orderAuctions[auctionId].bidderAddresses = ;
   
     
     mapping(address => uint256) public fundsByBidder;
@@ -54,6 +67,9 @@ contract demo
     event LogNewAuctioner(address newAuctioner); // adding
     event LogNewAuction(address saller, uint _auctioner); // adding
     
+    event LogNewBidderAuctioner(address newAuctioner); // adding
+    event LogNewBidderAuction(address saller, uint _auctioner); // adding
+    
 
     
     function startAuction (uint id, address payable owner, string memory name, string memory description, uint minBid, uint maxBid, uint threshold, uint startTime, uint endTime, uint bidIncrement) 
@@ -63,25 +79,47 @@ contract demo
         updateAuctioner(owner);
     }
     
-    function placeBid(address payable _address, uint amount, uint _id)
+    function isOwner(address owner) public view returns(bool isIndeed) {
+        // has auction before
+        return ownerAuctions[owner].length > 0;
+    }
+
+      
+    function updateAuctioner(address owner) public {
+        if(!isOwner(owner)) {
+            ownerAddress.push(owner);
+            emit LogNewAuctioner(owner);
+        }
+    }
+    
+    function totalOwners() public view returns (uint) {
+        return ownerAddress.length;
+    }
+    
+    function setAuctioner(uint  _auctioner)  public {
+            // there is no known rule about minimum bid, but let's say 0 is too low.
+            updateAuctioner(msg.sender);
+            ownerAuctions[msg.sender].push(_auctioner);
+            emit LogNewAuction(msg.sender, _auctioner);
+    }
+    
+    function placeBid(address payable _bidder, uint amount, uint _id)
         public
         payable
-        onlyAfterStart
-        onlyBeforeEnd
-        onlyNotCanceled
-        onlyOwner
+        // onlyAfterStart
+        // onlyBeforeEnd
+        // onlyNotCanceled
+        // onlyOwner
         returns (bool success)
     {
-        
-        // for (uint i = 0; i < bidderAccts.length; i++) {
-        // }
+        updateBidderAuctioner(_bidder);
         
         
         // reject double bid from same address
      //   require(msg.sender != bidderAccts, "You already placed a bin on this Auction");
         
         // reject payments of 0 ETH
-        require (msg.value > 0,"value must be greater then 0");
+        require (msg.value > auction.minBid,"value must be greater then minBid");
 
         // calculate the user's total bid based on the current amount they've sent to the contract
         // plus whatever has been sent with this transaction
@@ -126,32 +164,34 @@ contract demo
         // bidStruct a = biddersMap[_address];
         // bidderAccts.push(_address) - 1 ;
     
-
      //   bidderAccts.push(_bidder);
+     
+      //    updateAuctioner(_address);
+     
     }
     
-    function isOwner(address owner) public view returns(bool isIndeed) {
+    function isBidder(address _bidder) public view returns(bool isIndeed) {
         // has auction before
-        return ownerAuctions[owner].length > 0;
+        return bidderAuctions[_bidder].length > 0;
     }
 
       
-    function updateAuctioner(address owner) public {
-        if(!isOwner(owner)) {
-            ownerAddress.push(owner);
-            emit LogNewAuctioner(owner);
+    function updateBidderAuctioner(address _bidder) public {
+        if(!isBidder(_bidder)) {
+            bidderAddress.push(_bidder);
+            emit LogNewBidderAuctioner(_bidder);
         }
     }
     
-    function getUniqueAuctinerCount() public view returns (uint) {
-        return ownerAddress.length;
+    function totalBidder() public view returns (uint) {
+        return bidderAddress.length;
     }
     
-    function setAuctioner(uint  _auctioner)  public {
+    function setBidderAuctioner(uint  _auctioner)  public {
             // there is no known rule about minimum bid, but let's say 0 is too low.
-            updateAuctioner(msg.sender);
-            ownerAuctions[msg.sender].push(_auctioner);
-            emit LogNewAuction(msg.sender, _auctioner);
+            updateBidderAuctioner(msg.sender);
+            bidderAuctions[msg.sender].push(_auctioner);
+            emit LogNewBidderAuction(msg.sender, _auctioner);
     }
     
 //     function countBidders() view public returns (uint) {
